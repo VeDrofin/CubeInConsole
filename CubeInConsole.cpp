@@ -34,7 +34,7 @@ int main()
     consoleInit();
 
     // Инициализация матрицы поворота.
-    matRotate rotate(1, 0, 0); // Параметры - поворот по осям x, y, z.
+    matRotate rotate(1, 0.6, 0); // Параметры - поворот по осям x, y, z.
     // Инициализация буфера вывода.
     array<wchar_t, SizeView * 4 * SizeView * 2> buf{};
     // Инициализация камеры.

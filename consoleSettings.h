@@ -10,11 +10,11 @@ void consoleInit()
     CONSOLE_FONT_INFOEX cfi;
     cfi.cbSize = sizeof(cfi);
     cfi.dwFontSize.X = 0;                   // Ширина каждого символа в шрифте
-    cfi.dwFontSize.Y = 6;
+    cfi.dwFontSize.Y = 10;
     SetCurrentConsoleFontEx(GetStdHandle(STD_OUTPUT_HANDLE), FALSE, &cfi);
 
     // Кол-во колон необходимо заменить на SizeView * 4, строк на SizeView * 2.
-    system("mode con cols=300 lines=150");
+    system("mode con cols=160 lines=80");
 
     // Отключить отображение курсора в конце консоли.
     ::CONSOLE_CURSOR_INFO cursor_info{ sizeof(cursor_info), FALSE };
