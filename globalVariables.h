@@ -3,7 +3,7 @@
 const long double Pi = 3.14159265358979;
 
 // Отдаленность камеры от центра координат и маштабирование изображения.
-// НЕОБХОДИМО ЗАМЕНИТЬ ПЕРВУЮ СТРОЧКУ В int main(){...}
+// ПРИ ЗАМЕНЕ НЕОБХОДИМО ЗАМЕНИТЬ ПЕРВУЮ СТРОЧКУ В consoleSettings.h - system("mode con cols=300 lines=150");
 const int SizeView = 75;
 const int SizeCube = 30;
 
