@@ -57,6 +57,11 @@ struct point
         return (!(*this == elem));
     }
 
+    void print()
+    {
+        cout << x << ' ' << y << ' ' << z << endl;
+    }
+
     // Приведение вектора к единичной длине.
     void normalization()
     {
@@ -129,7 +134,7 @@ long double dist2(point elem1, point elem2)
 // Получение длины вектора.
 long double dist2(point elem)
 {
-    return elem.x * elem.x + elem.y * elem.y;
+    return elem.x * elem.x + elem.y * elem.y + elem.z * elem.z;
 }
 
 // Векторное произведение.
@@ -251,7 +256,7 @@ public:
     point p3;
     point p4;
 
-    square(point p1, point p3)
+    square(point p1 = point(), point p3 = point())
     {
         // Вектор диагонали.
         point d = p3 - p1;
@@ -284,6 +289,27 @@ public:
     }
 };
 
+bool pointInSquare(point& p, square& sq)
+{
+    long double d1, d2, d3, d4, d;
+    d1 = dist2(cross(sq.p2 - sq.p1, p - sq.p1)) / dist2(sq.p2 - sq.p1);
+    //cross(sq.p2 - sq.p1, p - sq.p1).print();
+    d2 = dist2(cross(sq.p3 - sq.p2, p - sq.p2)) / dist2(sq.p3 - sq.p2);
+    //cross(sq.p3 - sq.p2, p - sq.p2).print();
+    d3 = dist2(cross(sq.p4 - sq.p3, p - sq.p3)) / dist2(sq.p4 - sq.p3);
+    //cross(sq.p4 - sq.p3, p - sq.p3).print();
+    d4 = dist2(cross(sq.p1 - sq.p4, p - sq.p4)) / dist2(sq.p1 - sq.p4);
+    //cross(sq.p1 - sq.p4, p - sq.p4).print();
+
+    //cout << p.x << ' ' << p.y << ' ' << p.z << endl;
+    //cout << d1 << ' ' << d2 << ' ' << d3 << ' ' << d4 << endl;
+
+    d = dist2(sq.p1, sq.p2);
+    if (d1 <= d && d2 <= d && d3 <= d && d4 <= d)
+        return true;
+    return false;
+}
+
 
 class cam
 {
@@ -300,7 +326,7 @@ public:
         vect = vector<vector<Line> >(highVision, vector<Line>(widthVision));
         for (int i = 0; i < highVision; i++)
             for (int j = 0; j < widthVision; j++)
-                vect[i][j] = Line(coord, point(-h / 2 + i, -w / 2 + j, -10));
+                vect[i][j] = Line(coord, point(( - h / 2 + i ) * 2, -w / 2 + j, -10));
     }
 
     void draw(square sq)
@@ -360,13 +386,13 @@ public:
                     //if (i == highVision / 2 && j == widthVision / 2)
                     //    cout << "Look at me: ";
                     //cout << ans.x << ' ' << ans.y << ' ' << ans.z << endl;
-                    if (sq.p1.x <= ans.x && ans.x <= sq.p3.x &&
-                        sq.p1.y <= ans.y && ans.y <= sq.p3.y &&
-                        sq.p1.z <= ans.z && ans.z <= sq.p3.z)
+                    if ((sq.p1.x <= ans.x && ans.x <= sq.p3.x || sq.p3.x <= ans.x && ans.x <= sq.p1.x) &&
+                        (sq.p1.y <= ans.y && ans.y <= sq.p3.y || sq.p3.y <= ans.y && ans.y <= sq.p1.y) &&
+                        (sq.p1.z <= ans.z && ans.z <= sq.p3.z || sq.p3.z <= ans.z && ans.z <= sq.p1.z))
                         cout << 1;
-                    else if (sq.p3.x <= ans.x && ans.x <= sq.p1.x &&
-                        sq.p3.y <= ans.y && ans.y <= sq.p1.y &&
-                        sq.p3.z <= ans.z && ans.z <= sq.p1.z)
+                    else if ((sq.p2.x <= ans.x && ans.x <= sq.p4.x || sq.p4.x <= ans.x && ans.x <= sq.p2.x) &&
+                        (sq.p2.y <= ans.y && ans.y <= sq.p4.y || sq.p4.y <= ans.y && ans.y <= sq.p2.y) &&
+                        (sq.p2.z <= ans.z && ans.z <= sq.p4.z || sq.p4.z <= ans.z && ans.z <= sq.p2.z))
                         cout << 1;
                     else
                         cout << ' ';
@@ -399,39 +425,181 @@ public:
     }
 };
 
+void squareRotate(square& sq, matRotate m)
+{
+    sq.p1 = vectorRotate(sq.p1, m);
+    sq.p2 = vectorRotate(sq.p2, m);
+    sq.p3 = vectorRotate(sq.p3, m);
+    sq.p4 = vectorRotate(sq.p4, m);
+}
+
+class cube
+{
+public:
+    square sq1;
+    square sq2;
+    square sq3;
+    square sq4;
+    square sq5;
+    square sq6;
+    cube(square sq1, square sq2, square sq3, square sq4, square sq5, square sq6)
+    {
+        this->sq1 = sq1;
+        this->sq2 = sq2;
+        this->sq3 = sq3;
+        this->sq4 = sq4;
+        this->sq5 = sq5;
+        this->sq6 = sq6;
+    }
+
+    void rotate(matRotate m)
+    {
+        squareRotate(sq1, m);
+        squareRotate(sq2, m);
+        squareRotate(sq3, m);
+        squareRotate(sq4, m);
+        squareRotate(sq5, m);
+        squareRotate(sq6, m);
+    }
+};
+
+vector<vector<int> > colorizeMat(cam camera, cube Cube)
+{
+    vector < vector<pair <int, long double> > > distMatrix(camera.highVision, vector<pair<int, long double> >(camera.widthVision, pair<int, long double>(-1, 1000000000)));
+
+    vector<square> sqs = { Cube.sq1, Cube.sq2, Cube.sq3, Cube.sq4, Cube.sq5, Cube.sq6 };
+
+    for (int k = 0; k < 6; k++)
+    {
+        square sq = sqs[k];
+        // Точки, через которую проходит плоскость.
+        long double x = sq.p1.x;
+        long double y = sq.p1.y;
+        long double z = sq.p1.z;
+
+
+        // A, B, C, D - члены нормального уравнения плоскости.
+        point buf = cross(sq.p2 - sq.p1, sq.p3 - sq.p1);
+        long double A = buf.x;
+        long double B = buf.y;
+        long double C = buf.z;
+        long double D = -A * x - B * y - C * z;
+
+        for (int i = 0; i < camera.highVision; i++)
+        {
+            for (int j = 0; j < camera.widthVision; j++)
+            {
+                // a, b, c - направляющий вектор прямой.
+                long double a, b, c;
+                point buf = camera.vect[i][j].Second - camera.vect[i][j].First;
+                a = buf.x;
+                b = buf.y;
+                c = buf.z;
+                // Прямая проходит через точку, задающую координаты камеры this->coord
+                // Найдем значения параметра для прямой, через уравнение плоскости / решим систему уравнений.
+                long double tCnt = A * a + B * b + C * c;
+                long double t = -A * camera.coord.x - B * camera.coord.y - C * camera.coord.z - D;
+                if (t == 0)
+                    continue;
+                else
+                {
+                    t = t / tCnt;
+                    point ans;
+                    ans.x = camera.coord.x + a * t;
+                    ans.y = camera.coord.y + b * t;
+                    ans.z = camera.coord.z + c * t;
+                    //if (i == highVision / 2 && j == widthVision / 2)
+                    //    cout << "Look at me: ";
+                    //cout << ans.x << ' ' << ans.y << ' ' << ans.z << endl;
+                    
+                    if (pointInSquare(ans, sq))
+                        if (dist2(camera.coord, ans) < distMatrix[i][j].second)
+                        {
+                            distMatrix[i][j].second = dist2(camera.coord, ans);
+                            distMatrix[i][j].first = k;
+                        }
+
+                    //if ((sq.p1.x <= ans.x && ans.x <= sq.p3.x || sq.p3.x <= ans.x && ans.x <= sq.p1.x) &&
+                    //    (sq.p1.y <= ans.y && ans.y <= sq.p3.y || sq.p3.y <= ans.y && ans.y <= sq.p1.y) &&
+                    //    (sq.p1.z <= ans.z && ans.z <= sq.p3.z || sq.p3.z <= ans.z && ans.z <= sq.p1.z))
+                    //{
+                    //    if (dist2(camera.coord, ans) < distMatrix[i][j].second)
+                    //    {
+                    //        distMatrix[i][j].second = dist2(camera.coord, ans);
+                    //        distMatrix[i][j].first = k;
+                    //    }
+                    //}
+                    //else if ((sq.p2.x <= ans.x && ans.x <= sq.p4.x || sq.p4.x <= ans.x && ans.x <= sq.p2.x) &&
+                    //    (sq.p2.y <= ans.y && ans.y <= sq.p4.y || sq.p4.y <= ans.y && ans.y <= sq.p2.y) &&
+                    //    (sq.p2.z <= ans.z && ans.z <= sq.p4.z || sq.p4.z <= ans.z && ans.z <= sq.p2.z))
+                    //{
+                    //    if (dist2(camera.coord, ans) < distMatrix[i][j].second)
+                    //    {
+                    //        distMatrix[i][j].second = dist2(camera.coord, ans);
+                    //        distMatrix[i][j].first = k;
+                    //    }
+                    //}
+                }
+            }
+        }
+
+    }
+    vector<vector<int> > answer(camera.highVision, vector<int>(camera.widthVision));
+    for (int i = 0; i < camera.highVision; i++)
+        for (int j = 0; j < camera.widthVision; j++)
+            answer[i][j] = distMatrix[i][j].first;
+
+    return answer;
+
+};
+
+void print(cube Cube, cam camera)
+{
+    vector<vector<int> > vision = colorizeMat(camera, Cube);
+    for (int i = 0; i < vision.size(); i++)
+    {
+        for (int j = 0; j < vision[0].size(); j++)
+        {
+            if (vision[i][j] == -1)
+                cout << ' ';
+            else
+                cout << vision[i][j];
+        }
+        cout << endl;
+    }
+}
+
 int main()
 {
-    point p1(-5, -5, 5);
-    point p3(5, 5, 5);
-
+    //sq1
+    point p1(-10, -10, 10);
+    point p3(10, 10, 10);
     square sq1(p1, p3);
 
-    sq1.print();
-
-    p1 = point(-5, -5, -5);
-    p3 = point(5, 5, -5);
-
+    //sq2
+    p1 = point(-10, -10, -10);
+    p3 = point(10, 10, -10);
     square sq2(p1, p3);
 
-    p1 = point(-5, -5, -5);
-    p3 = point(5, -5, 5);
-
+    //sq3
+    p1 = point(-10, -10, -10);
+    p3 = point(10, -10, 10);
     square sq3(p1, p3);
 
-    p1 = point(-5, 5, -5);
-    p3 = point(5, 5, 5);
-
+    //sq4
+    p1 = point(-10, 10, -10);
+    p3 = point(10, 10, 10);
     square sq4(p1, p3);
 
 
     //sq5
-    p1 = point(-5, 5, 5);
-    p3 = point(-5, -5, -5);
+    p1 = point(-10, 10, 10);
+    p3 = point(-10, -10, -10);
     square sq5(p1, p3);
 
     //sq6
-    p1 = point(5, 5, 5);
-    p3 = point(5, -5, -5);
+    p1 = point(10, 10, 10);
+    p3 = point(10, -10, -10);
     square sq6(p1, p3);
 
     cam c(point(0, 0, 25), 60, 30);
@@ -442,13 +610,63 @@ int main()
     c.draw(sq5);
     c.draw(sq6);
 
-    //matRotate r(0, 90, );
-    //vectorRotate(p1, r);
-    //vectorRotate(p3, r);
-    //sq6 = square(p1, p3);
+    cube Cube(sq1, sq2, sq3, sq4, sq5, sq6);
+
+    for (int i = 0; i < 1000; i++)
+    {
+        for (int h = 0; h < 5000000; h++)
+            h = h;
+        std::cout << "\x1B[2J\x1B[H";
+        matRotate r(0, 3, 2);
+        print(Cube, c);
+        Cube.rotate(r);
+    }
+
+
+    //cout << "ttttttttttttttttttt" << endl;
+    //matRotate r(0, 2, 0);
+
+    ////for (int i = 0; i < 90; i++)
+    ////{
+    ////    for (int j = 0; j < 50000000; j++)
+    ////        int a = 0;
+    ////    sq1.print();
+    ////    vectorRotate(sq1, r);
+    ////    c.draw(sq1);
+    ////}
+
+    //vectorRotate(sq1, r);
+    //vectorRotate(sq2, r);
+    //vectorRotate(sq3, r);
+    //vectorRotate(sq4, r);
+    //vectorRotate(sq5, r);
+    //vectorRotate(sq6, r);
+
+    //sq1.print();
+    //c.draw(sq1);
+    //sq2.print();
+    //c.draw(sq2);
+    //sq3.print();
+    //vectorRotate(sq3, matRotate(0, 0, 180));
+    //c.draw(sq3);
+    //sq4.print();
+    //vectorRotate(sq4, matRotate(0, 0, 180));
+    //c.draw(sq4);
+    //sq5.print();
+    //vectorRotate(sq5, matRotate(0, 0, 180));
+    //c.draw(sq5);
+    //sq6.print();
+    //vectorRotate(sq6, matRotate(0, 0, 180));
     //c.draw(sq6);
 
-    //c.draw(sq5);
-    //c.draw(sq6);
+
+    ////matRotate r(0, 90, );
+    ////vectorRotate(p1, r);
+    ////vectorRotate(p3, r);
+    ////sq6 = square(p1, p3);
+    ////c.draw(sq6);
+
+    ////c.draw(sq5);
+    ////c.draw(sq6);
 
 }
