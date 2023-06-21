@@ -1,10 +1,23 @@
 ﻿#include <iostream>
+#include <Windows.h>
+#include <array>
+#include <string>
+#include <cstddef>
+#include <cstdlib>
 #include <vector>
 #include <cmath>
 #include <iomanip>
-using namespace std;
 
+using namespace std;
 const long double Pi = 3.14159265358979;
+
+// Отдаленность камеры от центра координат и маштабирование изображения.
+// НЕОБХОДИМО ЗАМЕНИТЬ ПЕРВУЮ СТРОЧКУ В int main(){...}
+const int SizeView = 75;
+const int SizeCube = 30;
+
+// Вектор расстояний каждого луча камеры до ближайшей стороны куба.
+vector<vector<long double> > distMatrix(SizeView*2, vector<long double>(SizeView*4, 100000000));
 
 // Точка в декартовой системе координат.
 struct point
@@ -78,11 +91,14 @@ struct point
         y = c;
     }
 };
+
 // Матрица поворота на определённый градус.
 struct matRotate
 {
 public:
     vector<vector<long double> > mat;
+
+    // Матрица поворота в R^3
     matRotate(long double a, long double b, long double c)
     {
         mat.resize(3);
@@ -104,25 +120,26 @@ public:
         mat[2][2] = cos(a) * cos(b);
     }
 
+    // Найти определитель матрицы. (по определению должен равняться единице)
     long double determinant()
     {
         long double First = mat[0][0] * (mat[1][1] * mat[2][2] - mat[1][2] * mat[2][1]);
         long double Second = mat[0][1] * (mat[1][0] * mat[2][2] - mat[2][0] * mat[1][2]);
         long double Third = mat[0][2] * (mat[1][0] * mat[2][1] - mat[1][1] * mat[2][0]);
-        //cout << First << endl;
-        //cout << Second << endl;
-        //cout << Third << endl;
         return First - Second + Third;
     }
 };
+
 // Поворот вектора.
-point vectorRotate(point p, matRotate m)
+void vectorRotate(point& p, matRotate& m)
 {
     point rez;
     rez.x = p.x * m.mat[0][0] + p.y * m.mat[1][0] + p.z * m.mat[2][0];
     rez.y = p.x * m.mat[0][1] + p.y * m.mat[1][1] + p.z * m.mat[2][1];
     rez.z = p.x * m.mat[0][2] + p.y * m.mat[1][2] + p.z * m.mat[2][2];
-    return rez;
+
+    p = rez;
+    //return rez;
 }
 
 // Получение квадрата расстояния между двумя точками.
@@ -131,6 +148,7 @@ long double dist2(point elem1, point elem2)
     elem2 = elem2 - elem1;
     return elem2.x * elem2.x + elem2.y * elem2.y + elem2.z * elem2.z;
 }
+
 // Получение длины вектора.
 long double dist2(point elem)
 {
@@ -190,7 +208,7 @@ public:
         long double b_ = elem.First.y - elem.Second.y;
 
         long double d = a * (elem.First.y - First.y) - b * (elem.First.x - First.x);
-        cout << d << ' ' << b * a_ - a * b_ << endl;
+        //cout << d << ' ' << b * a_ - a * b_ << endl;
 
         // Условия, при которых прямые совпадают.
         if (d == 0 && b * a_ - a * b_ == 0)
@@ -204,47 +222,6 @@ public:
     }
 };
 
-// Нахождение пересечения двух прямых.
-point intersection(Line l1, Line l2)
-{
-    long double a = l1.First.x - l1.Second.x;
-    long double b = l1.First.y - l1.Second.y;
-
-    long double a_ = l2.First.x - l2.Second.x;
-    long double b_ = l2.First.y - l2.Second.y;
-
-    long double d = a * (l2.First.y - l1.First.y) - b * (l2.First.x - l1.First.x);
-    cout << d << ' ' << b * a_ - a * b_ << endl;
-    // Случай, когда прямые совпадают.
-    if (d == 0 && b * a_ - a * b_ == 0)
-    {
-        cout << "\n\n Warning: Straight lines match! \n\n";
-        return point(0, 0);
-    }
-    // Случай, когда пересечений нет.
-    if (b * a_ - a * b_ == 0)
-    {
-        cout << "\n\n Warning: Straight lines don't intersect! \n\n";
-        return point(0, 0);
-    }
-
-    d /= b * a_ - a * b_;
-
-    point rez(l2.First.x + a_ * d, l2.First.y + b_ * d);
-    return rez;
-}
-// Нахождение координаты точки, которой будет лежать на биссектрисе, выход. из точки a.
-point Bis(point a, point b, point c)
-{
-    // Находим биссектриссу.
-    point l2 = c - a;
-    point l1 = b - a;
-    l1.normalization();
-    l2.normalization();
-
-    point bis1 = (l2 - l1) * 0.5;
-    return b + bis1;
-}
 
 
 // Квадрат в пространстве.
@@ -256,7 +233,7 @@ public:
     point p3;
     point p4;
 
-    square(point p1 = point(), point p3 = point())
+    square(point p1 = point(0, 0, 0), point p3 = point(0, 0, 0))
     {
         // Вектор диагонали.
         point d = p3 - p1;
@@ -289,49 +266,55 @@ public:
     }
 };
 
+// Проверка пренадлежности точки квадрату в пространстве.
 bool pointInSquare(point& p, square& sq)
 {
-    long double d1, d2, d3, d4, d;
-    d1 = dist2(cross(sq.p2 - sq.p1, p - sq.p1)) / dist2(sq.p2 - sq.p1);
-    //cross(sq.p2 - sq.p1, p - sq.p1).print();
-    d2 = dist2(cross(sq.p3 - sq.p2, p - sq.p2)) / dist2(sq.p3 - sq.p2);
-    //cross(sq.p3 - sq.p2, p - sq.p2).print();
-    d3 = dist2(cross(sq.p4 - sq.p3, p - sq.p3)) / dist2(sq.p4 - sq.p3);
-    //cross(sq.p4 - sq.p3, p - sq.p3).print();
-    d4 = dist2(cross(sq.p1 - sq.p4, p - sq.p4)) / dist2(sq.p1 - sq.p4);
-    //cross(sq.p1 - sq.p4, p - sq.p4).print();
+    // Расстаяние от точки до стороны квадрата должно быть меньше, чем расстояние между противоположными сторонами.
 
-    //cout << p.x << ' ' << p.y << ' ' << p.z << endl;
-    //cout << d1 << ' ' << d2 << ' ' << d3 << ' ' << d4 << endl;
+    // Расстояние от точки до прямой нахожу через векторное произведение.
+    // Модуль векторное произведение равен площади параллелограмма, построенного на них.
+    // Поэтому длина равна = |вект. произ| / длина напр. вектора прямой.
 
-    d = dist2(sq.p1, sq.p2);
-    if (d1 <= d && d2 <= d && d3 <= d && d4 <= d)
-        return true;
-    return false;
+    long double distanceToPoint, sideLenght;
+    sideLenght = dist2(sq.p1, sq.p2);
+    distanceToPoint = dist2(cross(sq.p2 - sq.p1, p - sq.p1)) / dist2(sq.p2 - sq.p1);
+    if (distanceToPoint > sideLenght) return false;
+    distanceToPoint = dist2(cross(sq.p3 - sq.p2, p - sq.p2)) / dist2(sq.p3 - sq.p2);
+    if (distanceToPoint > sideLenght) return false;
+    distanceToPoint = dist2(cross(sq.p4 - sq.p3, p - sq.p3)) / dist2(sq.p4 - sq.p3);
+    if (distanceToPoint > sideLenght) return false;
+    distanceToPoint = dist2(cross(sq.p1 - sq.p4, p - sq.p4)) / dist2(sq.p1 - sq.p4);
+    if (distanceToPoint > sideLenght) return false;
+
+    return true;
 }
 
-
-class cam
+// Класс камеры.
+class Camera
 {
 public:
+    // Координаты камеры.
     point coord;
+    // Ширина и высота области видимости.
     int widthVision, highVision;
+    // Вектор лучей камеры.
     vector<vector<Line> > vect;
-    cam(point Point = point(0, 0, 0), int w = 0, int h = 0)
+
+    // Конструктор для класса camera.
+    Camera(point coord = point(0, 0, 0), int widthVision = 0, int highVision = 0)
     {
-        coord = Point;
-        widthVision = w;
-        highVision = h;
+        this->coord = coord;
+        this->widthVision = widthVision;
+        this->highVision = highVision;
 
         vect = vector<vector<Line> >(highVision, vector<Line>(widthVision));
         for (int i = 0; i < highVision; i++)
             for (int j = 0; j < widthVision; j++)
-                vect[i][j] = Line(coord, point(( - h / 2 + i ) * 2, -w / 2 + j, -10));
+                vect[i][j] = Line(coord, point(( - highVision / 2 + i ) * 2, -widthVision / 2 + j, -SizeView));
     }
 
     void draw(square sq)
     {
-
         // Точки, через которую проходит плоскость.
         long double x = sq.p1.x;
         long double y = sq.p1.y;
@@ -343,22 +326,7 @@ public:
         long double B = buf.y;
         long double C = buf.z;
         long double D = -A * x - B * y - C * z;
-        cout << (sq.p2 - sq.p1).x << ' ' << (sq.p2 - sq.p1).y << ' ' << (sq.p2 - sq.p1).z << endl;
-        cout << (sq.p3 - sq.p1).x << ' ' << (sq.p3 - sq.p1).y << ' ' << (sq.p3 - sq.p1).z << endl;
-        cout << A << ' ' << B << ' ' << C << endl;
 
-        // a, b, c - направляющий вектор прямой.
-        long double a, b, c;
-        a = 0;
-        b = 0;
-        c = 1;
-
-        // Прямая проходит через точку, задающую координаты камеры this->coord
-        // Найдем значения параметра для прямой, через уравнение плоскости / решим систему уравнений.
-
-        long double tCnt = A * a + B * b + C * c;
-        cout << tCnt << endl;
-        long double t = -A * coord.x - B * coord.y - C * coord.z - D;
 
         for (int i = 0; i < highVision; i++)
         {
@@ -370,6 +338,7 @@ public:
                 a = buf.x;
                 b = buf.y;
                 c = buf.z;
+
                 // Прямая проходит через точку, задающую координаты камеры this->coord
                 // Найдем значения параметра для прямой, через уравнение плоскости / решим систему уравнений.
                 long double tCnt = A * a + B * b + C * c;
@@ -400,37 +369,16 @@ public:
             }
             cout << endl;
         }
-
-        //if (t == 0)
-        //    cout << ' ';
-        //else
-        //{
-        //    t = t / tCnt;
-        //    point ans;
-        //    ans.x = coord.x + a * t;
-        //    ans.y = coord.y + b * t;
-        //    ans.z = coord.z + c * t;
-        //    cout << t << ' ' << ans.x << ' ' << ans.y << ' ' << ans.z << endl;
-        //    if (sq.p1.x <= ans.x && ans.x <= sq.p3.x &&
-        //        sq.p1.y <= ans.y && ans.y <= sq.p3.y &&
-        //        sq.p1.z <= ans.z && ans.z <= sq.p3.z)
-        //        cout << 1;
-        //    else if (sq.p3.x <= ans.x && ans.x <= sq.p1.x &&
-        //        sq.p3.y <= ans.y && ans.y <= sq.p1.y &&
-        //        sq.p3.z <= ans.z && ans.z <= sq.p1.z)
-        //        cout << 1;
-        //    else
-        //        cout << ' ';
-        //}
     }
 };
 
-void squareRotate(square& sq, matRotate m)
+// Поворот квадрата.
+void squareRotate(square& sq, matRotate& m)
 {
-    sq.p1 = vectorRotate(sq.p1, m);
-    sq.p2 = vectorRotate(sq.p2, m);
-    sq.p3 = vectorRotate(sq.p3, m);
-    sq.p4 = vectorRotate(sq.p4, m);
+    vectorRotate(sq.p1, m);
+    vectorRotate(sq.p2, m);
+    vectorRotate(sq.p3, m);
+    vectorRotate(sq.p4, m);
 }
 
 class cube
@@ -442,7 +390,9 @@ public:
     square sq4;
     square sq5;
     square sq6;
-    cube(square sq1, square sq2, square sq3, square sq4, square sq5, square sq6)
+
+    // Конструктор для куба.
+    cube(square& sq1, square& sq2, square& sq3, square& sq4, square& sq5, square& sq6)
     {
         this->sq1 = sq1;
         this->sq2 = sq2;
@@ -452,6 +402,42 @@ public:
         this->sq6 = sq6;
     }
 
+    cube(const int& SizeCube)
+    {
+        //sq1
+        point p1(-1 * SizeCube, -1 * SizeCube, SizeCube);
+        point p3(SizeCube, SizeCube, SizeCube);
+        square sq1(p1, p3);
+        //sq2
+        p1 = point(-SizeCube, -SizeCube, -SizeCube);
+        p3 = point(SizeCube, SizeCube, -SizeCube);
+        square sq2(p1, p3);
+        //sq3
+        p1 = point(-SizeCube, -SizeCube, -SizeCube);
+        p3 = point(SizeCube, -SizeCube, SizeCube);
+        square sq3(p1, p3);
+        //sq4
+        p1 = point(-SizeCube, SizeCube, -SizeCube);
+        p3 = point(SizeCube, SizeCube, SizeCube);
+        square sq4(p1, p3);
+        //sq5
+        p1 = point(-SizeCube, SizeCube, SizeCube);
+        p3 = point(-SizeCube, -SizeCube, -SizeCube);
+        square sq5(p1, p3);
+        //sq6
+        p1 = point(SizeCube, SizeCube, SizeCube);
+        p3 = point(SizeCube, -SizeCube, -SizeCube);
+        square sq6(p1, p3);
+
+        this->sq1 = sq1;
+        this->sq2 = sq2;
+        this->sq3 = sq3;
+        this->sq4 = sq4;
+        this->sq5 = sq5;
+        this->sq6 = sq6;
+    }
+
+    // Повернуть все грани куба.
     void rotate(matRotate m)
     {
         squareRotate(sq1, m);
@@ -463,15 +449,17 @@ public:
     }
 };
 
-vector<vector<int> > colorizeMat(cam camera, cube Cube)
-{
-    vector < vector<pair <int, long double> > > distMatrix(camera.highVision, vector<pair<int, long double> >(camera.widthVision, pair<int, long double>(-1, 1000000000)));
 
-    vector<square> sqs = { Cube.sq1, Cube.sq2, Cube.sq3, Cube.sq4, Cube.sq5, Cube.sq6 };
+vector<vector<int> > colorizeMat( Camera& camera, cube Cube)
+{
+    vector<vector<long double> > distMatrix(camera.highVision, vector<long double>(camera.widthVision, 100000000));
+    vector<vector<int> > answer(camera.highVision, vector<int>(camera.widthVision, -1));
+
+    vector<square*> sqs = { &Cube.sq1, &Cube.sq2, &Cube.sq3, &Cube.sq4, &Cube.sq5, &Cube.sq6 };
 
     for (int k = 0; k < 6; k++)
     {
-        square sq = sqs[k];
+        square& sq = *sqs[k];
         // Точки, через которую проходит плоскость.
         long double x = sq.p1.x;
         long double y = sq.p1.y;
@@ -508,52 +496,94 @@ vector<vector<int> > colorizeMat(cam camera, cube Cube)
                     ans.x = camera.coord.x + a * t;
                     ans.y = camera.coord.y + b * t;
                     ans.z = camera.coord.z + c * t;
-                    //if (i == highVision / 2 && j == widthVision / 2)
-                    //    cout << "Look at me: ";
-                    //cout << ans.x << ' ' << ans.y << ' ' << ans.z << endl;
                     
                     if (pointInSquare(ans, sq))
-                        if (dist2(camera.coord, ans) < distMatrix[i][j].second)
+                        if (dist2(camera.coord, ans) < distMatrix[i][j])
                         {
-                            distMatrix[i][j].second = dist2(camera.coord, ans);
-                            distMatrix[i][j].first = k;
+                            distMatrix[i][j] = dist2(camera.coord, ans);
+                            answer[i][j] = k;
                         }
-
-                    //if ((sq.p1.x <= ans.x && ans.x <= sq.p3.x || sq.p3.x <= ans.x && ans.x <= sq.p1.x) &&
-                    //    (sq.p1.y <= ans.y && ans.y <= sq.p3.y || sq.p3.y <= ans.y && ans.y <= sq.p1.y) &&
-                    //    (sq.p1.z <= ans.z && ans.z <= sq.p3.z || sq.p3.z <= ans.z && ans.z <= sq.p1.z))
-                    //{
-                    //    if (dist2(camera.coord, ans) < distMatrix[i][j].second)
-                    //    {
-                    //        distMatrix[i][j].second = dist2(camera.coord, ans);
-                    //        distMatrix[i][j].first = k;
-                    //    }
-                    //}
-                    //else if ((sq.p2.x <= ans.x && ans.x <= sq.p4.x || sq.p4.x <= ans.x && ans.x <= sq.p2.x) &&
-                    //    (sq.p2.y <= ans.y && ans.y <= sq.p4.y || sq.p4.y <= ans.y && ans.y <= sq.p2.y) &&
-                    //    (sq.p2.z <= ans.z && ans.z <= sq.p4.z || sq.p4.z <= ans.z && ans.z <= sq.p2.z))
-                    //{
-                    //    if (dist2(camera.coord, ans) < distMatrix[i][j].second)
-                    //    {
-                    //        distMatrix[i][j].second = dist2(camera.coord, ans);
-                    //        distMatrix[i][j].first = k;
-                    //    }
-                    //}
                 }
             }
         }
 
     }
-    vector<vector<int> > answer(camera.highVision, vector<int>(camera.widthVision));
-    for (int i = 0; i < camera.highVision; i++)
-        for (int j = 0; j < camera.widthVision; j++)
-            answer[i][j] = distMatrix[i][j].first;
 
     return answer;
 
 };
 
-void print(cube Cube, cam camera)
+// (попытка в оптимизацию)
+// Расставление символов в буфер вывода.
+void colorizeMat(array<wchar_t, SizeView * 4 * SizeView * 2>& buf, Camera& camera, cube& Cube)
+{
+
+    for (int i = 0; i < camera.highVision; i++)
+        for (int j = 0; j < camera.widthVision; j++)
+        {
+            distMatrix[i][j] = 100000000;
+            buf[i * 4 * SizeView + j] = ' ';
+        }
+
+    // Вектор с сылками на стороны куба.
+    vector<square*> sqs = { &Cube.sq1, &Cube.sq2, &Cube.sq3, &Cube.sq4, &Cube.sq5, &Cube.sq6 };
+
+    for (int k = 0; k < 6; k++)
+    {
+        square* sq = sqs[k];
+        // Точки, через которую проходит плоскость.
+        long double x = sq->p1.x;
+        long double y = sq->p1.y;
+        long double z = sq->p1.z;
+
+
+        // A, B, C, D - члены нормального уравнения плоскости.
+        point l = cross(sq->p2 - sq->p1, sq->p3 - sq->p1);
+        long double A = l.x;
+        long double B = l.y;
+        long double C = l.z;
+        long double D = -A * x - B * y - C * z;
+
+        for (int i = 0; i < camera.highVision; i++)
+        {
+            for (int j = 0; j < camera.widthVision; j++)
+            {
+                // a, b, c - направляющий вектор прямой.
+                long double a, b, c;
+                point l = camera.vect[i][j].Second - camera.vect[i][j].First;
+                a = l.x;
+                b = l.y;
+                c = l.z;
+                // Прямая проходит через точку, задающую координаты камеры this->coord
+                // Найдем значения параметра для прямой, через уравнение плоскости / решим систему уравнений.
+                long double tCnt = A * a + B * b + C * c;
+                long double t = -A * camera.coord.x - B * camera.coord.y - C * camera.coord.z - D;
+                if (t == 0)
+                    continue;
+                else
+                {
+                    t = t / tCnt;
+                    point ans;
+                    ans.x = camera.coord.x + a * t;
+                    ans.y = camera.coord.y + b * t;
+                    ans.z = camera.coord.z + c * t;
+
+                    if (pointInSquare(ans, *sq))
+                        if (dist2(camera.coord, ans) < distMatrix[i][j])
+                        {
+                            distMatrix[i][j] = dist2(camera.coord, ans);
+                            buf[i * 4 * SizeView + j] = char(k + '1');
+                        }
+                }
+            }
+        }
+    }
+
+    return;
+};
+
+// Вывод куба в консоль.
+void print(cube Cube, Camera camera)
 {
     vector<vector<int> > vision = colorizeMat(camera, Cube);
     for (int i = 0; i < vision.size(); i++)
@@ -571,102 +601,36 @@ void print(cube Cube, cam camera)
 
 int main()
 {
-    //sq1
-    point p1(-10, -10, 10);
-    point p3(10, 10, 10);
-    square sq1(p1, p3);
+    // Размер шрифта в консоли.
+    CONSOLE_FONT_INFOEX cfi;
+    cfi.cbSize = sizeof(cfi);
+    cfi.dwFontSize.X = 0;                   // Ширина каждого символа в шрифте
+    cfi.dwFontSize.Y = 6;
+    SetCurrentConsoleFontEx(GetStdHandle(STD_OUTPUT_HANDLE), FALSE, &cfi);
 
-    //sq2
-    p1 = point(-10, -10, -10);
-    p3 = point(10, 10, -10);
-    square sq2(p1, p3);
+    // Кол-во колон необходимо заменить на SizeView * 4, строк на SizeView * 2.
+    system("mode con cols=300 lines=150");
 
-    //sq3
-    p1 = point(-10, -10, -10);
-    p3 = point(10, -10, 10);
-    square sq3(p1, p3);
+    // Матрица поворота.
+    matRotate rotate(1, 0, 0); // Параметры - поворот по осям x, y, z.
 
-    //sq4
-    p1 = point(-10, 10, -10);
-    p3 = point(10, 10, 10);
-    square sq4(p1, p3);
+    // Инициализация буфера вывода.
+    array<wchar_t, SizeView * 4 * SizeView * 2> buf{};
+    HANDLE const output{ ::GetStdHandle(STD_OUTPUT_HANDLE) };
+    
+    // Отключить отображение курсора в конце консоли.
+    ::CONSOLE_CURSOR_INFO cursor_info{ sizeof(cursor_info), FALSE };
+    ::SetConsoleCursorInfo(output, ::std::addressof(cursor_info));
+    
 
+    // Инициализация камеры и куба.
+    Camera camera(point(0, 0, SizeView), SizeView * 4, SizeView * 2);
+    cube Cube(SizeCube);
 
-    //sq5
-    p1 = point(-10, 10, 10);
-    p3 = point(-10, -10, -10);
-    square sq5(p1, p3);
-
-    //sq6
-    p1 = point(10, 10, 10);
-    p3 = point(10, -10, -10);
-    square sq6(p1, p3);
-
-    cam c(point(0, 0, 25), 60, 30);
-    c.draw(sq1);
-    c.draw(sq2);
-    c.draw(sq3);
-    c.draw(sq4);
-    c.draw(sq5);
-    c.draw(sq6);
-
-    cube Cube(sq1, sq2, sq3, sq4, sq5, sq6);
-
-    for (int i = 0; i < 1000; i++)
+    while(true)
     {
-        for (int h = 0; h < 5000000; h++)
-            h = h;
-        std::cout << "\x1B[2J\x1B[H";
-        matRotate r(0, 3, 2);
-        print(Cube, c);
-        Cube.rotate(r);
+        colorizeMat(buf, camera, Cube);
+        ::WriteConsoleW(output, buf.data(), SizeView * 2 * SizeView * 4, {}, {});
+        Cube.rotate(rotate);
     }
-
-
-    //cout << "ttttttttttttttttttt" << endl;
-    //matRotate r(0, 2, 0);
-
-    ////for (int i = 0; i < 90; i++)
-    ////{
-    ////    for (int j = 0; j < 50000000; j++)
-    ////        int a = 0;
-    ////    sq1.print();
-    ////    vectorRotate(sq1, r);
-    ////    c.draw(sq1);
-    ////}
-
-    //vectorRotate(sq1, r);
-    //vectorRotate(sq2, r);
-    //vectorRotate(sq3, r);
-    //vectorRotate(sq4, r);
-    //vectorRotate(sq5, r);
-    //vectorRotate(sq6, r);
-
-    //sq1.print();
-    //c.draw(sq1);
-    //sq2.print();
-    //c.draw(sq2);
-    //sq3.print();
-    //vectorRotate(sq3, matRotate(0, 0, 180));
-    //c.draw(sq3);
-    //sq4.print();
-    //vectorRotate(sq4, matRotate(0, 0, 180));
-    //c.draw(sq4);
-    //sq5.print();
-    //vectorRotate(sq5, matRotate(0, 0, 180));
-    //c.draw(sq5);
-    //sq6.print();
-    //vectorRotate(sq6, matRotate(0, 0, 180));
-    //c.draw(sq6);
-
-
-    ////matRotate r(0, 90, );
-    ////vectorRotate(p1, r);
-    ////vectorRotate(p3, r);
-    ////sq6 = square(p1, p3);
-    ////c.draw(sq6);
-
-    ////c.draw(sq5);
-    ////c.draw(sq6);
-
 }
